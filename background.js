@@ -1,179 +1,10 @@
 // background.js - Service Worker for YouTube Transcript Extractor
 
-// The static InnerTube API key
-const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
-
-// Helper function to extract YouTube video ID from URL
-function getVideoId(url) {
-  const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([\w-]{11})/;
-  const match = url.match(regex);
-  return match ? match[1] : null;
-}
-
-// Helper function to format timestamp from milliseconds to MM:SS
-function formatTimestamp(msStr) {
-  const ms = parseInt(msStr);
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-// Recursively search for transcript params in the API response
-function findTranscriptParams(data) {
-  if (typeof data === 'object' && data !== null) {
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        const result = findTranscriptParams(item);
-        if (result) return result;
-      }
-    } else {
-      if (data.getTranscriptEndpoint && data.getTranscriptEndpoint.params) {
-        return data.getTranscriptEndpoint.params;
-      }
-      for (const value of Object.values(data)) {
-        const result = findTranscriptParams(value);
-        if (result) return result;
-      }
-    }
-  }
-  return null;
-}
-
-// Main transcript extraction function
-async function extractTranscript(url) {
-  try {
-    const videoId = getVideoId(url);
-    
-    if (!videoId) {
-      throw new Error("Could not extract a valid YouTube video ID from the URL.");
-    }
-
-    console.log(`Video ID found: ${videoId}`);
-
-    // Step 1: Get the 'params' token from the /next endpoint
-    console.log("Step 1: Fetching initial page data to find the transcript token...");
-    
-    const nextUrl = `https://www.youtube.com/youtubei/v1/next?key=${INNERTUBE_API_KEY}`;
-    const nextPayload = {
-      context: {
-        client: {
-          clientName: "WEB",
-          clientVersion: "2.20241217.01.00",
-          platform: "DESKTOP",
-          osName: "Windows",
-          osVersion: "10.0"
-        }
-      },
-      videoId: videoId
-    };
-
-    const nextResponse = await fetch(nextUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'X-YouTube-Client-Name': '1',
-        'X-YouTube-Client-Version': '2.20241217.01.00',
-        'Origin': 'https://www.youtube.com',
-        'Referer': 'https://www.youtube.com/'
-      },
-      body: JSON.stringify(nextPayload)
-    });
-
-    if (!nextResponse.ok) {
-      throw new Error(`HTTP error! status: ${nextResponse.status}`);
-    }
-
-    const nextData = await nextResponse.json();
-    const paramsToken = findTranscriptParams(nextData);
-
-    if (!paramsToken) {
-      throw new Error("Could not find the transcript 'params' token in the initial page data. This video may not have a transcript available via this method.");
-    }
-
-    console.log("Success! Found the necessary transcript token.");
-
-    // Step 2: Use the token to call the /get_transcript endpoint
-    console.log("Step 2: Calling the 'get_transcript' endpoint with the token...");
-
-    const transcriptUrl = `https://www.youtube.com/youtubei/v1/get_transcript?key=${INNERTUBE_API_KEY}`;
-    const transcriptPayload = {
-      context: {
-        client: {
-          clientName: "WEB",
-          clientVersion: "2.20241217.01.00",
-          platform: "DESKTOP",
-          osName: "Windows",
-          osVersion: "10.0"
-        }
-      },
-      params: paramsToken
-    };
-
-    const transcriptResponse = await fetch(transcriptUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'X-YouTube-Client-Name': '1',
-        'X-YouTube-Client-Version': '2.20241217.01.00',
-        'Origin': 'https://www.youtube.com',
-        'Referer': 'https://www.youtube.com/'
-      },
-      body: JSON.stringify(transcriptPayload)
-    });
-
-    if (!transcriptResponse.ok) {
-      throw new Error(`HTTP error! status: ${transcriptResponse.status}`);
-    }
-
-    const transcriptData = await transcriptResponse.json();
-
-    // Parse the transcript data
-    const actions = transcriptData.actions || [{}];
-    const segments = actions[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.initialSegments || [];
-
-    if (!segments || segments.length === 0) {
-      throw new Error("API call was successful, but no transcript segments were returned.");
-    }
-
-    console.log("Success! Parsed the final transcript data.");
-
-    // Format the transcript
-    let transcript = "";
-    for (const segment of segments) {
-      const renderer = segment.transcriptSegmentRenderer || {};
-      const textRuns = renderer.snippet?.runs || [{}];
-      const fullText = textRuns.map(run => run.text || "").join("");
-      const startMs = renderer.startMs || "0";
-
-      const timestamp = formatTimestamp(startMs);
-      const cleanText = fullText.replace(/\n/g, ' ').trim();
-      
-      if (cleanText) {
-        transcript += `${timestamp} - ${cleanText}\n`;
-      }
-    }
-
-    return {
-      success: true,
-      transcript: transcript.trim()
-    };
-
-  } catch (error) {
-    console.error("Error extracting transcript:", error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'extractTranscript') {
-    extractTranscript(request.url)
+    // Instead of making API calls, we'll use the content script to extract from the page
+    extractTranscriptFromPage(request.url)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({
         success: false,
@@ -184,3 +15,79 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+// Helper function to extract YouTube video ID from URL
+function getVideoId(url) {
+  const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([\w-]{11})/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+}
+
+// New approach: Use content script to extract transcript from the page
+async function extractTranscriptFromPage(url) {
+  try {
+    const videoId = getVideoId(url);
+    
+    if (!videoId) {
+      throw new Error("Could not extract a valid YouTube video ID from the URL.");
+    }
+
+    // Get the active tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+
+    // Check if we're already on the YouTube video page
+    if (activeTab.url.includes(videoId)) {
+      // We're on the right page, extract transcript directly
+      const result = await chrome.tabs.sendMessage(activeTab.id, {
+        action: 'extractTranscriptFromDOM'
+      });
+      return result;
+    } else {
+      // We need to navigate to the YouTube page first
+      return await navigateAndExtract(url, videoId);
+    }
+
+  } catch (error) {
+    console.error("Error extracting transcript:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Navigate to YouTube page and extract transcript
+async function navigateAndExtract(url, videoId) {
+  try {
+    // Create a new tab or update existing one
+    const tab = await chrome.tabs.create({ url: url, active: false });
+    
+    // Wait for the page to load
+    await new Promise((resolve) => {
+      const listener = (tabId, changeInfo) => {
+        if (tabId === tab.id && changeInfo.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+
+    // Wait a bit more for YouTube to load fully
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Now extract the transcript
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      action: 'extractTranscriptFromDOM'
+    });
+
+    // Close the tab if it was created for extraction
+    await chrome.tabs.remove(tab.id);
+
+    return result;
+
+  } catch (error) {
+    throw new Error(`Failed to extract transcript: ${error.message}`);
+  }
+}

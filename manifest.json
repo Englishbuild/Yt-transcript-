@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "Extract transcripts from YouTube videos using the InnerTube API",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
