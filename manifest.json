@@ -1,13 +1,10 @@
 {
-  "_comment": "To install: 1. Open Chrome -> Extensions -> Enable Developer Mode -> Load Unpacked -> Select this folder",
   "manifest_version": 3,
   "name": "YouTube Transcript Extractor",
   "version": "1.0",
   "description": "Extract transcripts from YouTube videos using the InnerTube API",
   "permissions": [
-    "activeTab",
-    "https://www.youtube.com/",
-    "https://youtu.be/"
+    "activeTab"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",

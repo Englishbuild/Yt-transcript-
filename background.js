@@ -59,7 +59,10 @@ async function extractTranscript(url) {
       context: {
         client: {
           clientName: "WEB",
-          clientVersion: "2.20240610.01.00"
+          clientVersion: "2.20241217.01.00",
+          platform: "DESKTOP",
+          osName: "Windows",
+          osVersion: "10.0"
         }
       },
       videoId: videoId
@@ -69,6 +72,11 @@ async function extractTranscript(url) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20241217.01.00',
+        'Origin': 'https://www.youtube.com',
+        'Referer': 'https://www.youtube.com/'
       },
       body: JSON.stringify(nextPayload)
     });
@@ -94,7 +102,10 @@ async function extractTranscript(url) {
       context: {
         client: {
           clientName: "WEB",
-          clientVersion: "2.20240610.01.00"
+          clientVersion: "2.20241217.01.00",
+          platform: "DESKTOP",
+          osName: "Windows",
+          osVersion: "10.0"
         }
       },
       params: paramsToken
@@ -104,6 +115,11 @@ async function extractTranscript(url) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20241217.01.00',
+        'Origin': 'https://www.youtube.com',
+        'Referer': 'https://www.youtube.com/'
       },
       body: JSON.stringify(transcriptPayload)
     });
