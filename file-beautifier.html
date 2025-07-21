@@ -323,9 +323,13 @@
             color: #28a745;
         }
 
-        .file-tree-ignored {
-            color: #dc3545;
-            font-style: italic;
+        .file-tree-preserved {
+            color: #6c757d;
+            font-style: normal;
+        }
+
+        .file-tree-copied {
+            color: #333;
         }
 
         .summary-box {
@@ -359,7 +363,7 @@
     <div class="container">
         <div class="header">
             <h1>🎨 Extension Beautifier</h1>
-            <p>Upload ZIP files of browser extensions and beautify all code files while preserving folder structure</p>
+            <p>Upload ZIP files of browser extensions and beautify code files while preserving ALL files and folder structure</p>
         </div>
         
         <div class="main-content">
@@ -372,8 +376,8 @@
                     </div>
                 </div>
                 <div class="file-types">
-                    Supported: ZIP files containing extensions (.js, .css, .html, .json, .xml, .ts, .jsx, .tsx, .vue, .php, .py, .rb)
-                    <br>Ignores: Images (.png, .jpg, .svg, .gif), fonts (.woff, .ttf), and other binary files
+                    Beautifies: Code files (.js, .css, .html, .json, .xml, .ts, .jsx, .tsx, .vue, .php, .py, .rb)
+                    <br>Preserves: All other files including images (.png, .jpg, .svg), fonts (.woff, .ttf), and binaries
                 </div>
             </div>
 
@@ -408,7 +412,7 @@
                 </div>
                 <div class="summary-item">
                     <div class="summary-number" id="ignoredFiles">0</div>
-                    <div class="summary-label">Ignored</div>
+                    <div class="summary-label">Preserved</div>
                 </div>
                 <div class="summary-item">
                     <div class="summary-number" id="foldersCount">0</div>
@@ -579,14 +583,17 @@
                     let icon = '📄';
                     let type = 'file';
                     
-                    if (shouldIgnore) {
-                        icon = '🚫';
-                        type = 'ignored';
-                        fileStats.ignored++;
-                    } else if (shouldBeautify) {
+                    if (shouldBeautify) {
                         icon = '✨';
                         type = 'beautified';
                         fileStats.beautified++;
+                    } else if (shouldIgnore) {
+                        icon = '📁';
+                        type = 'preserved';
+                        fileStats.ignored++;
+                    } else {
+                        icon = '📄';
+                        type = 'copied';
                     }
                     
                     treeHtml += generateTreeItem(relativePath, icon, type, getIndentLevel(relativePath));
@@ -637,10 +644,7 @@
                         const shouldBeautify = BEAUTIFY_EXTENSIONS.includes(extension);
                         const shouldIgnore = IGNORE_EXTENSIONS.includes(extension);
                         
-                        if (shouldIgnore) {
-                            // Skip ignored files
-                            continue;
-                        } else if (shouldBeautify) {
+                        if (shouldBeautify) {
                             // Beautify the file
                             try {
                                 const content = await file.async('string');
@@ -652,6 +656,10 @@
                                 const content = await file.async('string');
                                 beautifiedZip.file(relativePath, content);
                             }
+                        } else if (shouldIgnore) {
+                            // Copy binary files as-is (preserving original binary data)
+                            const content = await file.async('arraybuffer');
+                            beautifiedZip.file(relativePath, content);
                         } else {
                             // Copy other text files as-is
                             const content = await file.async('string');
