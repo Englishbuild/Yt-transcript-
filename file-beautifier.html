@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Beautifier & Unminifier</title>
+    <title>Extension Beautifier & Unminifier</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -261,26 +262,118 @@
         .copy-btn:hover {
             background: #218838;
         }
+
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .file-tree {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #dee2e6;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .file-tree-item {
+            padding: 5px 0;
+            border-left: 2px solid transparent;
+            padding-left: 20px;
+            font-family: 'Courier New', Monaco, monospace;
+            font-size: 0.9rem;
+        }
+
+        .file-tree-folder {
+            font-weight: bold;
+            color: #6c757d;
+            border-left-color: #4facfe;
+        }
+
+        .file-tree-file {
+            color: #333;
+        }
+
+        .file-tree-beautified {
+            color: #28a745;
+        }
+
+        .file-tree-ignored {
+            color: #dc3545;
+            font-style: italic;
+        }
+
+        .summary-box {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .summary-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .summary-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4facfe;
+        }
+
+        .summary-label {
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎨 File Beautifier</h1>
-            <p>Upload and beautify your minified JavaScript, CSS, HTML, JSON, or XML files</p>
+            <h1>🎨 Extension Beautifier</h1>
+            <p>Upload ZIP files of browser extensions and beautify all code files while preserving folder structure</p>
         </div>
         
         <div class="main-content">
             <div class="upload-section">
                 <div class="file-input-wrapper">
-                    <input type="file" class="file-input" id="fileInput" accept=".js,.css,.html,.htm,.json,.xml,.txt">
+                    <input type="file" class="file-input" id="fileInput" accept=".zip">
                     <div class="file-input-button">
-                        <span style="font-size: 3rem;">📁</span>
-                        <span>Click to select a file or drag and drop</span>
+                        <span style="font-size: 3rem;">📦</span>
+                        <span>Click to select a ZIP file or drag and drop</span>
                     </div>
                 </div>
                 <div class="file-types">
-                    Supported formats: JavaScript (.js), CSS (.css), HTML (.html), JSON (.json), XML (.xml)
+                    Supported: ZIP files containing extensions (.js, .css, .html, .json, .xml, .ts, .jsx, .tsx, .vue, .php, .py, .rb)
+                    <br>Ignores: Images (.png, .jpg, .svg, .gif), fonts (.woff, .ttf), and other binary files
                 </div>
             </div>
 
@@ -291,12 +384,39 @@
             </div>
 
             <div class="controls">
-                <button class="btn btn-primary" id="beautifyBtn" disabled>✨ Beautify</button>
+                <button class="btn btn-primary" id="beautifyBtn" disabled>✨ Beautify Extension</button>
                 <button class="btn btn-secondary" id="clearBtn">🗑️ Clear</button>
-                <button class="btn btn-secondary" id="downloadBtn" disabled>💾 Download</button>
+                <button class="btn btn-secondary" id="downloadBtn" disabled>📦 Download ZIP</button>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
             </div>
 
             <div id="status" class="status" style="display: none;"></div>
+
+            <div class="summary-box" id="summaryBox" style="display: none;">
+                <div class="summary-item">
+                    <div class="summary-number" id="totalFiles">0</div>
+                    <div class="summary-label">Total Files</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="beautifiedFiles">0</div>
+                    <div class="summary-label">Beautified</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="ignoredFiles">0</div>
+                    <div class="summary-label">Ignored</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="foldersCount">0</div>
+                    <div class="summary-label">Folders</div>
+                </div>
+            </div>
+
+            <div class="file-tree" id="fileTree"></div>
 
             <div class="editor-container" id="editorContainer" style="display: none;">
                 <div class="editor-panel">
@@ -323,9 +443,33 @@
     </div>
 
     <script>
-        let currentFile = null;
-        let currentFileType = null;
-        let beautifiedContent = '';
+        let currentZipFile = null;
+        let originalZip = null;
+        let beautifiedZip = null;
+        let fileStats = {
+            total: 0,
+            beautified: 0,
+            ignored: 0,
+            folders: 0
+        };
+
+        // File extensions to beautify
+        const BEAUTIFY_EXTENSIONS = [
+            'js', 'jsx', 'ts', 'tsx', 'css', 'scss', 'sass', 'less',
+            'html', 'htm', 'vue', 'json', 'xml', 'php', 'py', 'rb',
+            'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'kt'
+        ];
+
+        // File extensions to ignore (binary files, images, etc.)
+        const IGNORE_EXTENSIONS = [
+            'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'bmp', 'webp',
+            'woff', 'woff2', 'ttf', 'eot', 'otf',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            'zip', 'rar', '7z', 'tar', 'gz',
+            'exe', 'dll', 'so', 'dylib',
+            'mp3', 'mp4', 'avi', 'mov', 'wav', 'flac',
+            'bin', 'dat', 'db', 'sqlite'
+        ];
 
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
@@ -339,6 +483,10 @@
         const editorContainer = document.getElementById('editorContainer');
         const originalContent = document.getElementById('originalContent');
         const beautifiedContentEl = document.getElementById('beautifiedContent');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const summaryBox = document.getElementById('summaryBox');
+        const fileTree = document.getElementById('fileTree');
 
         // File input handling
         fileInput.addEventListener('change', handleFileSelect);
@@ -370,83 +518,271 @@
         });
 
         // Button event listeners
-        beautifyBtn.addEventListener('click', beautifyFile);
+        beautifyBtn.addEventListener('click', beautifyExtension);
         clearBtn.addEventListener('click', clearAll);
-        downloadBtn.addEventListener('click', downloadBeautified);
+        downloadBtn.addEventListener('click', downloadBeautifiedZip);
 
-        function handleFileSelect(event) {
+        async function handleFileSelect(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            currentFile = file;
-            const extension = file.name.split('.').pop().toLowerCase();
-            currentFileType = extension;
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showStatus('Please select a ZIP file!', 'error');
+                return;
+            }
 
+            currentZipFile = file;
+            
             // Show file info
             fileName.textContent = file.name;
             fileSize.textContent = formatFileSize(file.size);
-            fileType.textContent = extension.toUpperCase();
+            fileType.textContent = 'ZIP';
             fileInfo.style.display = 'block';
 
-            // Read file content
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                originalContent.value = e.target.result;
+            try {
+                showStatus('Loading ZIP file...', 'info');
+                
+                // Read and parse ZIP file
+                const arrayBuffer = await file.arrayBuffer();
+                originalZip = await JSZip.loadAsync(arrayBuffer);
+                
+                // Analyze ZIP contents
+                await analyzeZipContents();
+                
                 beautifyBtn.disabled = false;
-                editorContainer.style.display = 'grid';
-                showStatus('File loaded successfully!', 'success');
-            };
-            reader.onerror = function() {
-                showStatus('Error reading file!', 'error');
-            };
-            reader.readAsText(file);
+                showStatus('ZIP file loaded successfully! Ready to beautify.', 'success');
+                
+            } catch (error) {
+                showStatus('Error reading ZIP file: ' + error.message, 'error');
+                console.error('ZIP read error:', error);
+            }
         }
 
-        function beautifyFile() {
-            const content = originalContent.value;
-            if (!content.trim()) {
-                showStatus('No content to beautify!', 'error');
+        async function analyzeZipContents() {
+            fileStats = { total: 0, beautified: 0, ignored: 0, folders: 0 };
+            let treeHtml = '<div style="margin-bottom: 15px; font-weight: bold; color: #4facfe;">📦 ' + currentZipFile.name + '</div>';
+            
+            const entries = Object.keys(originalZip.files).sort();
+            
+            for (const relativePath of entries) {
+                const file = originalZip.files[relativePath];
+                
+                if (file.dir) {
+                    fileStats.folders++;
+                    treeHtml += generateTreeItem(relativePath, '📁', 'folder', getIndentLevel(relativePath));
+                } else {
+                    fileStats.total++;
+                    const extension = getFileExtension(relativePath);
+                    const shouldBeautify = BEAUTIFY_EXTENSIONS.includes(extension);
+                    const shouldIgnore = IGNORE_EXTENSIONS.includes(extension);
+                    
+                    let icon = '📄';
+                    let type = 'file';
+                    
+                    if (shouldIgnore) {
+                        icon = '🚫';
+                        type = 'ignored';
+                        fileStats.ignored++;
+                    } else if (shouldBeautify) {
+                        icon = '✨';
+                        type = 'beautified';
+                        fileStats.beautified++;
+                    }
+                    
+                    treeHtml += generateTreeItem(relativePath, icon, type, getIndentLevel(relativePath));
+                }
+            }
+            
+            // Update UI
+            fileTree.innerHTML = treeHtml;
+            fileTree.style.display = 'block';
+            
+            document.getElementById('totalFiles').textContent = fileStats.total;
+            document.getElementById('beautifiedFiles').textContent = fileStats.beautified;
+            document.getElementById('ignoredFiles').textContent = fileStats.ignored;
+            document.getElementById('foldersCount').textContent = fileStats.folders;
+            summaryBox.style.display = 'grid';
+        }
+
+        async function beautifyExtension() {
+            if (!originalZip) {
+                showStatus('No ZIP file loaded!', 'error');
                 return;
             }
 
             try {
-                let beautified = '';
+                beautifyBtn.disabled = true;
+                progressContainer.style.display = 'block';
+                showStatus('Beautifying extension files...', 'info');
                 
-                switch (currentFileType) {
-                    case 'js':
-                        beautified = beautifyJavaScript(content);
-                        break;
-                    case 'css':
-                        beautified = beautifyCSS(content);
-                        break;
-                    case 'html':
-                    case 'htm':
-                        beautified = beautifyHTML(content);
-                        break;
-                    case 'json':
-                        beautified = beautifyJSON(content);
-                        break;
-                    case 'xml':
-                        beautified = beautifyXML(content);
-                        break;
-                    default:
-                        beautified = content; // Fallback for unsupported types
-                        showStatus('File type not specifically supported, showing original content', 'info');
+                beautifiedZip = new JSZip();
+                
+                const entries = Object.keys(originalZip.files);
+                let processedFiles = 0;
+                
+                for (const relativePath of entries) {
+                    const file = originalZip.files[relativePath];
+                    
+                    // Update progress
+                    processedFiles++;
+                    const progress = Math.round((processedFiles / entries.length) * 100);
+                    progressFill.style.width = progress + '%';
+                    progressFill.textContent = progress + '%';
+                    
+                    if (file.dir) {
+                        // Add directory to new ZIP
+                        beautifiedZip.folder(relativePath);
+                    } else {
+                        const extension = getFileExtension(relativePath);
+                        const shouldBeautify = BEAUTIFY_EXTENSIONS.includes(extension);
+                        const shouldIgnore = IGNORE_EXTENSIONS.includes(extension);
+                        
+                        if (shouldIgnore) {
+                            // Skip ignored files
+                            continue;
+                        } else if (shouldBeautify) {
+                            // Beautify the file
+                            try {
+                                const content = await file.async('string');
+                                const beautifiedContent = beautifyFileContent(content, extension);
+                                beautifiedZip.file(relativePath, beautifiedContent);
+                            } catch (error) {
+                                console.warn(`Error beautifying ${relativePath}:`, error);
+                                // If beautification fails, add original content
+                                const content = await file.async('string');
+                                beautifiedZip.file(relativePath, content);
+                            }
+                        } else {
+                            // Copy other text files as-is
+                            const content = await file.async('string');
+                            beautifiedZip.file(relativePath, content);
+                        }
+                    }
+                    
+                    // Small delay to allow UI updates
+                    if (processedFiles % 10 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1));
+                    }
                 }
-
-                beautifiedContent = beautified;
-                beautifiedContentEl.value = beautified;
+                
                 downloadBtn.disabled = false;
-                showStatus('File beautified successfully!', 'success');
+                progressContainer.style.display = 'none';
+                showStatus('Extension beautified successfully! You can now download the beautified ZIP.', 'success');
                 
             } catch (error) {
-                showStatus('Error beautifying file: ' + error.message, 'error');
+                showStatus('Error beautifying extension: ' + error.message, 'error');
                 console.error('Beautification error:', error);
+                progressContainer.style.display = 'none';
+            } finally {
+                beautifyBtn.disabled = false;
             }
         }
 
+        // Helper functions
+        function getFileExtension(filename) {
+            return filename.split('.').pop().toLowerCase();
+        }
+
+        function getIndentLevel(path) {
+            return (path.match(/\//g) || []).length;
+        }
+
+        function generateTreeItem(path, icon, type, indentLevel) {
+            const indent = '  '.repeat(indentLevel);
+            const displayName = path.split('/').pop() || path;
+            return `<div class="file-tree-item file-tree-${type}">${indent}${icon} ${displayName}</div>`;
+        }
+
+        function beautifyFileContent(content, extension) {
+            try {
+                switch (extension) {
+                    case 'js':
+                    case 'jsx':
+                    case 'ts':
+                    case 'tsx':
+                        return beautifyJavaScript(content);
+                    case 'css':
+                    case 'scss':
+                    case 'sass':
+                    case 'less':
+                        return beautifyCSS(content);
+                    case 'html':
+                    case 'htm':
+                    case 'vue':
+                        return beautifyHTML(content);
+                    case 'json':
+                        return beautifyJSON(content);
+                    case 'xml':
+                        return beautifyXML(content);
+                    case 'php':
+                        return beautifyPHP(content);
+                    case 'py':
+                        return beautifyPython(content);
+                    default:
+                        return content; // Return as-is for unsupported types
+                }
+            } catch (error) {
+                console.warn(`Error beautifying ${extension} file:`, error);
+                return content; // Return original content if beautification fails
+            }
+        }
+
+        async function downloadBeautifiedZip() {
+            if (!beautifiedZip) {
+                showStatus('No beautified extension to download!', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Generating ZIP file...', 'info');
+                
+                const blob = await beautifiedZip.generateAsync({
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 }
+                });
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const originalName = currentZipFile.name.replace('.zip', '');
+                a.download = `${originalName}_beautified.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showStatus('Beautified extension downloaded successfully!', 'success');
+                
+            } catch (error) {
+                showStatus('Error generating ZIP file: ' + error.message, 'error');
+                console.error('ZIP generation error:', error);
+            }
+        }
+
+        function clearAll() {
+            currentZipFile = null;
+            originalZip = null;
+            beautifiedZip = null;
+            fileStats = { total: 0, beautified: 0, ignored: 0, folders: 0 };
+            
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            fileTree.style.display = 'none';
+            summaryBox.style.display = 'none';
+            progressContainer.style.display = 'none';
+            editorContainer.style.display = 'none';
+            status.style.display = 'none';
+            
+            beautifyBtn.disabled = true;
+            downloadBtn.disabled = true;
+            
+            progressFill.style.width = '0%';
+            progressFill.textContent = '0%';
+        }
+
         function beautifyJavaScript(code) {
-            // Basic JavaScript beautifier
+            // Enhanced JavaScript beautifier
             let result = '';
             let indentLevel = 0;
             let inString = false;
@@ -475,7 +811,7 @@
                     inComment = false;
                 }
                 
-                // Handle strings
+                // Handle strings and template literals
                 if (!inComment && !inMultiComment && (char === '"' || char === "'" || char === '`')) {
                     if (!inString) {
                         inString = true;
@@ -629,37 +965,64 @@
             }).join('\n');
         }
 
-        function clearAll() {
-            currentFile = null;
-            currentFileType = null;
-            beautifiedContent = '';
-            fileInput.value = '';
-            originalContent.value = '';
-            beautifiedContentEl.value = '';
-            fileInfo.style.display = 'none';
-            editorContainer.style.display = 'none';
-            status.style.display = 'none';
-            beautifyBtn.disabled = true;
-            downloadBtn.disabled = true;
-        }
-
-        function downloadBeautified() {
-            if (!beautifiedContent) {
-                showStatus('No beautified content to download!', 'error');
-                return;
+        function beautifyPHP(php) {
+            // Basic PHP beautifier
+            let result = '';
+            let indentLevel = 0;
+            let inString = false;
+            let stringChar = '';
+            
+            const lines = php.split('\n');
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                // Decrease indent for closing braces
+                if (line.startsWith('}')) {
+                    indentLevel = Math.max(0, indentLevel - 1);
+                }
+                
+                result += '  '.repeat(indentLevel) + line + '\n';
+                
+                // Increase indent for opening braces
+                if (line.endsWith('{')) {
+                    indentLevel++;
+                }
             }
             
-            const blob = new Blob([beautifiedContent], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'beautified_' + (currentFile ? currentFile.name : 'file.txt');
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            return result.trim();
+        }
+
+        function beautifyPython(python) {
+            // Basic Python beautifier (mainly fixing indentation)
+            const lines = python.split('\n');
+            let result = '';
+            let indentLevel = 0;
             
-            showStatus('File downloaded successfully!', 'success');
+            for (let line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    result += '\n';
+                    continue;
+                }
+                
+                // Decrease indent for dedent keywords
+                if (trimmed.startsWith(('except', 'elif', 'else', 'finally'))) {
+                    indentLevel = Math.max(0, indentLevel - 1);
+                    result += '  '.repeat(indentLevel) + trimmed + '\n';
+                    indentLevel++;
+                } else {
+                    result += '  '.repeat(indentLevel) + trimmed + '\n';
+                    
+                    // Increase indent after colon
+                    if (trimmed.endsWith(':')) {
+                        indentLevel++;
+                    }
+                }
+            }
+            
+            return result.trim();
         }
 
         function copyToClipboard(elementId) {
