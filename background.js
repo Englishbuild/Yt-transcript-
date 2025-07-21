@@ -2,23 +2,7 @@ let chromeURLPattern = /^https?:\/\/chrome.google.com\/webstore\/.+?\/([a-z]{32}
 let microsoftURLPattern = /^https?:\/\/microsoftedge.microsoft.com\/addons\/detail\/.+?\/([a-z]{32})(?=[\/#?]|$)/;
 let chromeNewURLPattern = /^https?:\/\/chromewebstore.google.com\/detail\/.+?\/([a-z]{32})(?=[\/#?]|$)/;
 
-// File extensions to beautify
-const BEAUTIFY_EXTENSIONS = [
-  'js', 'jsx', 'ts', 'tsx', 'css', 'scss', 'sass', 'less',
-  'html', 'htm', 'vue', 'json', 'xml', 'php', 'py', 'rb',
-  'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'kt'
-];
-
-// File extensions to ignore (binary files, images, etc.)
-const IGNORE_EXTENSIONS = [
-  'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'bmp', 'webp',
-  'woff', 'woff2', 'ttf', 'eot', 'otf',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'zip', 'rar', '7z', 'tar', 'gz',
-  'exe', 'dll', 'so', 'dylib',
-  'mp3', 'mp4', 'avi', 'mov', 'wav', 'flac',
-  'bin', 'dat', 'db', 'sqlite'
-];
+// Note: Beautification features will be added in a future update
 
 function getChromeVersion() {
   var pieces = navigator.userAgent.match(/Chrom(?:e|ium)\/([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/);
@@ -48,6 +32,9 @@ let currentVersion = getChromeVersion();
 let version = currentVersion.major + "." + currentVersion.minor + "." + currentVersion.build + "." + currentVersion.patch;
 const nacl_arch = getNaclArch();
 
+// Note: Full beautification with JSZip will be implemented in a future update
+// For now, this version focuses on working ZIP downloads with improved naming
+
 function getTabTitle(title, currentEXTId, url) {
   if (!chromeNewURLPattern.exec(url)) {
     title = title.match(/^(.*[ -])/);
@@ -75,7 +62,7 @@ function download(downloadAs, tab) {
     if (downloadAs === "zip") {
       url = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=${version}&x=id%3D${result[1]}%26installsource%3Dondemand%26uc&nacl_arch=${nacl_arch}&acceptformat=crx2,crx3`;
       convertURLToBeautifiedZip(url, function(urlVal) {
-        downloadFile(urlVal, name + "_beautified.zip");
+        downloadFile(urlVal, name + ".zip");
       });
     } else if (downloadAs === "crx") {
       url = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=${version}&acceptformat=crx2,crx3&x=id%3D${result[1]}%26uc&nacl_arch=${nacl_arch}`;
@@ -111,73 +98,14 @@ function ArrayBufferToBlob(arraybuffer, callback) {
 // Enhanced function to convert CRX to beautified ZIP
 async function convertURLToBeautifiedZip(url, callback) {
   try {
-    // Import JSZip dynamically
-    const JSZip = await import('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
-    
-    const response = await fetch(url);
-    const arrayBuffer = await response.arrayBuffer();
-    
-    // Extract ZIP from CRX
-    const zipBlob = ArrayBufferToBlob(arrayBuffer);
-    const zipArrayBuffer = await zipBlob.arrayBuffer();
-    
-    // Load original ZIP
-    const originalZip = await JSZip.default.loadAsync(zipArrayBuffer);
-    const beautifiedZip = new JSZip.default();
-    
-    // Process each file in the ZIP
-    const entries = Object.keys(originalZip.files);
-    
-    for (const relativePath of entries) {
-      const file = originalZip.files[relativePath];
-      
-      if (file.dir) {
-        // Add directory to new ZIP
-        beautifiedZip.folder(relativePath);
-      } else {
-        const extension = getFileExtension(relativePath);
-        const shouldBeautify = BEAUTIFY_EXTENSIONS.includes(extension);
-        const shouldIgnore = IGNORE_EXTENSIONS.includes(extension);
-        
-        if (shouldIgnore) {
-          // Skip ignored files (binary files, images, etc.)
-          continue;
-        } else if (shouldBeautify) {
-          // Beautify the file
-          try {
-            const content = await file.async('string');
-            const beautifiedContent = beautifyFileContent(content, extension);
-            beautifiedZip.file(relativePath, beautifiedContent);
-          } catch (error) {
-            console.warn(`Error beautifying ${relativePath}:`, error);
-            // If beautification fails, add original content
-            const content = await file.async('string');
-            beautifiedZip.file(relativePath, content);
-          }
-        } else {
-          // Copy other text files as-is
-          const content = await file.async('string');
-          beautifiedZip.file(relativePath, content);
-        }
-      }
-    }
-    
-    // Generate the beautified ZIP
-    const beautifiedBlob = await beautifiedZip.generateAsync({
-      type: 'blob',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 }
+    // For now, use the original ZIP conversion with filename change
+    // TODO: Implement full beautification once JSZip loading is resolved
+    convertURLToZip(url, function(dataUrl) {
+      // Just change the filename to indicate it's "beautified"
+      callback(dataUrl);
     });
-    
-    // Convert to data URL for download
-    const reader = new FileReader();
-    reader.readAsDataURL(beautifiedBlob);
-    reader.onloadend = function() {
-      callback(reader.result);
-    };
-    
   } catch (error) {
-    console.error('Error beautifying ZIP:', error);
+    console.error('Error in beautified ZIP conversion:', error);
     // Fallback to original ZIP conversion
     convertURLToZip(url, callback);
   }
@@ -198,287 +126,7 @@ function convertURLToZip(url, callback, xhrProgressListener) {
   });
 }
 
-// Helper functions for beautification
-function getFileExtension(filename) {
-  return filename.split('.').pop().toLowerCase();
-}
-
-function beautifyFileContent(content, extension) {
-  try {
-    switch (extension) {
-      case 'js':
-      case 'jsx':
-      case 'ts':
-      case 'tsx':
-        return beautifyJavaScript(content);
-      case 'css':
-      case 'scss':
-      case 'sass':
-      case 'less':
-        return beautifyCSS(content);
-      case 'html':
-      case 'htm':
-      case 'vue':
-        return beautifyHTML(content);
-      case 'json':
-        return beautifyJSON(content);
-      case 'xml':
-        return beautifyXML(content);
-      case 'php':
-        return beautifyPHP(content);
-      case 'py':
-        return beautifyPython(content);
-      default:
-        return content; // Return as-is for unsupported types
-    }
-  } catch (error) {
-    console.warn(`Error beautifying ${extension} file:`, error);
-    return content; // Return original content if beautification fails
-  }
-}
-
-function beautifyJavaScript(code) {
-  // Enhanced JavaScript beautifier
-  let result = '';
-  let indentLevel = 0;
-  let inString = false;
-  let stringChar = '';
-  let inComment = false;
-  let inMultiComment = false;
-  
-  for (let i = 0; i < code.length; i++) {
-    const char = code[i];
-    const nextChar = code[i + 1];
-    const prevChar = code[i - 1];
-    
-    // Handle comments
-    if (!inString && char === '/' && nextChar === '/') {
-      inComment = true;
-    }
-    if (!inString && char === '/' && nextChar === '*') {
-      inMultiComment = true;
-    }
-    if (inMultiComment && char === '*' && nextChar === '/') {
-      inMultiComment = false;
-      result += char;
-      continue;
-    }
-    if (inComment && char === '\n') {
-      inComment = false;
-    }
-    
-    // Handle strings and template literals
-    if (!inComment && !inMultiComment && (char === '"' || char === "'" || char === '`')) {
-      if (!inString) {
-        inString = true;
-        stringChar = char;
-      } else if (char === stringChar && prevChar !== '\\') {
-        inString = false;
-        stringChar = '';
-      }
-    }
-    
-    if (!inString && !inComment && !inMultiComment) {
-      if (char === '{' || char === '[') {
-        result += char + '\n' + '  '.repeat(++indentLevel);
-        continue;
-      }
-      if (char === '}' || char === ']') {
-        result += '\n' + '  '.repeat(--indentLevel) + char;
-        if (nextChar && nextChar !== ',' && nextChar !== ';' && nextChar !== '}' && nextChar !== ']') {
-          result += '\n' + '  '.repeat(indentLevel);
-        }
-        continue;
-      }
-      if (char === ';') {
-        result += char + '\n' + '  '.repeat(indentLevel);
-        continue;
-      }
-      if (char === ',' && indentLevel > 0) {
-        result += char + '\n' + '  '.repeat(indentLevel);
-        continue;
-      }
-    }
-    
-    result += char;
-  }
-  
-  return result.replace(/\n\s*\n/g, '\n').trim();
-}
-
-function beautifyCSS(css) {
-  let result = '';
-  let indentLevel = 0;
-  let inRule = false;
-  
-  css = css.replace(/\s+/g, ' ').trim();
-  
-  for (let i = 0; i < css.length; i++) {
-    const char = css[i];
-    const nextChar = css[i + 1];
-    
-    if (char === '{') {
-      inRule = true;
-      result += ' {\n';
-      indentLevel++;
-      continue;
-    }
-    
-    if (char === '}') {
-      inRule = false;
-      indentLevel--;
-      result += '\n' + '  '.repeat(indentLevel) + '}\n\n';
-      continue;
-    }
-    
-    if (char === ';' && inRule) {
-      result += ';\n' + '  '.repeat(indentLevel);
-      continue;
-    }
-    
-    if (char === ',' && !inRule) {
-      result += ',\n' + '  '.repeat(indentLevel);
-      continue;
-    }
-    
-    result += char;
-  }
-  
-  return result.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
-}
-
-function beautifyHTML(html) {
-  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
-  let result = '';
-  let indentLevel = 0;
-  let inTag = false;
-  let tagName = '';
-  
-  html = html.replace(/>\s*</g, '><');
-  
-  for (let i = 0; i < html.length; i++) {
-    const char = html[i];
-    
-    if (char === '<') {
-      if (html[i + 1] === '/') {
-        // Closing tag
-        indentLevel--;
-        result += '\n' + '  '.repeat(indentLevel);
-      } else {
-        // Opening tag
-        const tagMatch = html.substring(i).match(/^<([a-zA-Z][a-zA-Z0-9]*)/);
-        if (tagMatch) {
-          tagName = tagMatch[1].toLowerCase();
-          if (i > 0) result += '\n' + '  '.repeat(indentLevel);
-          if (!voidElements.includes(tagName) && !html.substring(i).startsWith('<!')) {
-            indentLevel++;
-          }
-        }
-      }
-      inTag = true;
-    }
-    
-    result += char;
-    
-    if (char === '>') {
-      inTag = false;
-      if (voidElements.includes(tagName)) {
-        indentLevel--;
-      }
-    }
-  }
-  
-  return result.trim();
-}
-
-function beautifyJSON(json) {
-  const parsed = JSON.parse(json);
-  return JSON.stringify(parsed, null, 2);
-}
-
-function beautifyXML(xml) {
-  const PADDING = '  ';
-  const reg = /(>)(<)(\/*)/g;
-  let formatted = xml.replace(reg, '$1\r\n$2$3');
-  let pad = 0;
-  
-  return formatted.split('\r\n').map(line => {
-    let indent = 0;
-    if (line.match(/.+<\/\w[^>]*>$/)) {
-      indent = 0;
-    } else if (line.match(/^<\/\w/) && pad > 0) {
-      pad -= 1;
-    } else if (line.match(/^<\w[^>]*[^\/]>.*$/)) {
-      indent = 1;
-    } else {
-      indent = 0;
-    }
-    
-    const padding = PADDING.repeat(pad);
-    pad += indent;
-    
-    return padding + line;
-  }).join('\n');
-}
-
-function beautifyPHP(php) {
-  // Basic PHP beautifier
-  let result = '';
-  let indentLevel = 0;
-  
-  const lines = php.split('\n');
-  
-  for (let line of lines) {
-    line = line.trim();
-    if (!line) continue;
-    
-    // Decrease indent for closing braces
-    if (line.startsWith('}')) {
-      indentLevel = Math.max(0, indentLevel - 1);
-    }
-    
-    result += '  '.repeat(indentLevel) + line + '\n';
-    
-    // Increase indent for opening braces
-    if (line.endsWith('{')) {
-      indentLevel++;
-    }
-  }
-  
-  return result.trim();
-}
-
-function beautifyPython(python) {
-  // Basic Python beautifier (mainly fixing indentation)
-  const lines = python.split('\n');
-  let result = '';
-  let indentLevel = 0;
-  
-  for (let line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      result += '\n';
-      continue;
-    }
-    
-    // Decrease indent for dedent keywords
-    if (trimmed.startsWith('except') || trimmed.startsWith('elif') || 
-        trimmed.startsWith('else') || trimmed.startsWith('finally')) {
-      indentLevel = Math.max(0, indentLevel - 1);
-      result += '  '.repeat(indentLevel) + trimmed + '\n';
-      indentLevel++;
-    } else {
-      result += '  '.repeat(indentLevel) + trimmed + '\n';
-      
-      // Increase indent after colon
-      if (trimmed.endsWith(':')) {
-        indentLevel++;
-      }
-    }
-  }
-  
-  return result.trim();
-}
+// Beautification functions will be added in a future update
 
 function downloadFile(url, fileName, currentEXTId = "unknown", _fails = 0) {
   chrome.downloads.download({
@@ -536,7 +184,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
     'documentUrlPatterns': ['https://microsoftedge.microsoft.com/addons/detail/*']
   });
   chrome.contextMenus.create({
-    'title': 'Download Beautified ZIP for this extension',
+    'title': 'Download ZIP for this extension',
     'contexts': ['all'],
     id: "zip",
     parentId: parent,

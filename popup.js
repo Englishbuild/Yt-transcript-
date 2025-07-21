@@ -57,7 +57,7 @@ function ready() {
       
       // 16 = Magic number (4), CRX format version (4), lengths (2x4)
       var zip = buf.slice(zipStartOffset, buf.length);
-      var fileName = file.name.replace(".crx", "_beautified.zip");
+      var fileName = file.name.replace(".crx", ".zip");
       var blob = new Blob([zip], {
         type: "application/octet-stream"
       });
