@@ -1,9 +1,9 @@
 {
   "update_url": "https://clients2.google.com/service/update2/crx",
-  "name": "CRX Extractor/Downloader",
-  "version": "1.6.0",
+  "name": "CRX Extractor/Downloader with Code Beautifier",
+  "version": "1.7.0",
   "manifest_version": 3,
-  "description": "Download CRX Files directly as crx or zip file depending upon your choice",
+  "description": "Download CRX Files as original format or extract and beautify the code (JS, CSS, HTML, JSON) for easy reading",
   "permissions": [
     "downloads",
     "contextMenus",
